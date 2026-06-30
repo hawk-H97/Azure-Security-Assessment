@@ -1,19 +1,23 @@
-"""Base check — all Azure service checks inherit from this."""
+"""Base check — all Azure service checks inherit from this.
+No region/location filtering; resources are discovered globally within the subscription."""
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).parent.parent
+# base.py lives at: <project_root>/checks/azure/base.py
+# So .parent.parent.parent = <project_root>
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 class BaseCheck:
     SERVICE = "Azure"
 
-    def __init__(self, credential, subscription_id, location, display):
-        self.credential       = credential
-        self.subscription_id  = subscription_id
-        self.location         = location
-        self.display          = display
+    def __init__(self, credential, subscription_id, location="", display=None):
+        self.credential        = credential
+        self.subscription_id   = subscription_id
+        # location kept for signature compatibility but not used for filtering
+        self.location          = location
+        self.display           = display
         self._compliance_cache = None
 
     def run_all(self):
@@ -23,10 +27,9 @@ class BaseCheck:
 
     def finding(self, check_id, resource_id, resource_name, resource_type,
                 status, severity, check_name, exact_path, issue_detail,
-                remediation="", tags=None, resource_group="", location=None):
-        """Build a standardised finding dict — same schema as AWS version.
-        If `location` is passed (e.g. the resource's real Azure region),
-        it is used; otherwise falls back to the scanner-level placeholder."""
+                remediation="", tags=None, resource_group="", location=""):
+        """Build a standardised finding dict.
+        'location' is taken from the resource itself, not from scan config."""
         from engine.remediation import get_remediation
 
         proper = get_remediation(check_id)
@@ -42,10 +45,7 @@ class BaseCheck:
         owner_tag = ""
         tag_str   = ""
         if tags:
-            if isinstance(tags, dict):
-                tag_dict = tags
-            else:
-                tag_dict = {}
+            tag_dict  = tags if isinstance(tags, dict) else {}
             owner_tag = (tag_dict.get("Owner") or tag_dict.get("owner") or
                          tag_dict.get("CreatedBy") or tag_dict.get("Team") or "")
             tag_str   = ", ".join(f"{k}={v}" for k, v in tag_dict.items()) if tag_dict else ""
@@ -57,7 +57,8 @@ class BaseCheck:
             "resource_name":      str(resource_name),
             "resource_type":      str(resource_type),
             "resource_group":     str(resource_group),
-            "location":           (location or self.location),
+            "location":           str(location),   # from resource metadata
+            "check_name":         check_name,
             "severity":           severity,
             "status":             status,
             "exact_path":         exact_path,
@@ -74,40 +75,45 @@ class BaseCheck:
 
     def error_finding(self, check_id, error_msg):
         return {
-            "check_id":      check_id,
-            "service":       self.SERVICE,
-            "resource_id":   "ERROR",
-            "resource_name": "ERROR",
-            "resource_type": "ERROR",
-            "resource_group": "",
-            "location":      self.location,
-            "check_name":    f"Check failed: {check_id}",
-            "severity":      "Low",
-            "status":        "ERROR",
-            "exact_path":    "N/A",
-            "issue_detail":  str(error_msg)[:300],
-            "remediation":   "",
-            "created_by":    "",
-            "last_modified_by": "",
+            "check_id":           check_id,
+            "service":            self.SERVICE,
+            "resource_id":        "ERROR",
+            "resource_name":      "ERROR",
+            "resource_type":      "ERROR",
+            "resource_group":     "",
+            "location":           "",
+            "check_name":         f"Check failed: {check_id}",
+            "severity":           "Low",
+            "status":             "ERROR",
+            "exact_path":         "N/A",
+            "issue_detail":       str(error_msg)[:300],
+            "remediation":        "",
+            "created_by":         "",
+            "last_modified_by":   "",
             "last_modified_date": "",
-            "owner_tag":     "",
-            "tags":          "",
-            "compliance":    [],
-            "scan_time":     datetime.now(timezone.utc).isoformat(),
+            "owner_tag":          "",
+            "tags":               "",
+            "compliance":         [],
+            "scan_time":          datetime.now(timezone.utc).isoformat(),
         }
 
     def _get_compliance(self, check_id):
-        """Return list of dicts [{framework, version, requirement, description, source}]
-        — identical format to AWS base.py so the same Excel/HTML reporters work."""
+        """Return list of dicts [{framework, version, requirement, description, source}].
+        Loads from <project_root>/compliance/azure/*.json (built by deps.py at startup)."""
         if self._compliance_cache is None:
             self._compliance_cache = {}
             try:
-                comp_dir = ROOT / "compliance" / "azure"
+                comp_dir = PROJECT_ROOT / "compliance" / "azure"
+                if not comp_dir.exists():
+                    return []
                 for jf in comp_dir.glob("*.json"):
-                    data = json.loads(jf.read_text())
-                    fw   = data.get("Framework", "")
-                    ver  = data.get("Version", "")
-                    src  = data.get("Source", "")
+                    try:
+                        data = json.loads(jf.read_text(encoding="utf-8"))
+                    except Exception:
+                        continue
+                    fw  = data.get("Framework", "")
+                    ver = data.get("Version", "")
+                    src = data.get("Source", "")
                     for req in data.get("Requirements", []):
                         for cid in req.get("Checks", []):
                             self._compliance_cache.setdefault(cid, []).append({
