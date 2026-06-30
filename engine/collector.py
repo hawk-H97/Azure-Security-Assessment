@@ -104,7 +104,6 @@ class CredentialCollector:
                 "subscription_id":    sub.subscription_id,
                 "credential":         credential,
                 "auth_method":        "az_login",
-                "tenant_id":          sub.tenant_id,
             })
 
         return result
