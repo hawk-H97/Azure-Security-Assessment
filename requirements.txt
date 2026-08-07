@@ -1,0 +1,39 @@
+# Azure Audit Pro v1 — Dependencies
+# Tested with Python 3.9–3.12
+
+# Core auth
+azure-identity>=1.15.0
+
+# Management SDKs — pinned to latest stable versions
+azure-mgmt-resource>=23.0.0
+azure-mgmt-compute>=30.0.0
+azure-mgmt-network>=25.0.0
+azure-mgmt-storage>=21.0.0
+azure-mgmt-sql>=3.0.1
+azure-mgmt-keyvault>=10.0.0
+azure-mgmt-monitor>=6.0.0
+azure-mgmt-containerservice>=28.0.0
+azure-mgmt-web>=7.0.0
+azure-mgmt-servicebus>=8.0.0
+azure-mgmt-cosmosdb>=9.0.0
+azure-mgmt-redis>=14.0.0
+azure-mgmt-containerregistry>=10.0.0
+azure-mgmt-logic>=9.0.0
+azure-mgmt-recoveryservices>=4.0.0
+azure-mgmt-security>=7.0.0
+azure-mgmt-authorization>=3.0.0
+azure-mgmt-dns>=8.0.0
+azure-mgmt-subscription>=3.1.1
+azure-mgmt-policyinsights>=1.0.0
+azure-mgmt-privatedns>=1.1.0
+
+# Key Vault data plane
+azure-keyvault-keys>=4.7.0
+azure-keyvault-secrets>=4.7.0
+
+# azure-mgmt-sql 3.x depends on 'six' (Python 2/3 compat shim)
+six>=1.16.0
+
+# Reports
+openpyxl>=3.1.2
+requests>=2.31.0
